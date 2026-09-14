@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPJ - City Storage & Item Monitoring</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            900: '#0b0f19',
+                            800: '#111827',
+                            700: '#1f2937',
+                            600: '#374151',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Firebase SDK CDN (Compat Version untuk Single File) -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .dropdown-menu { display: none; position: absolute; z-index: 50; }
+        .dropdown-menu.show { display: block; }
+    </style>
+</head>
+<body class="bg-dark-900 text-gray-100 min-h-screen flex flex-col justify-between selection:bg-blue-500 selection:text-white" onclick="closeAllDropdowns(event)">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-dark-800 border-b border-dark-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 p-2 rounded-lg text-white shadow-lg shadow-blue-500/30">
+                    <i class="fa-solid fa-boxes-stacked text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-wider text-white">OPJ STORAGE</h1>
+                    <p class="text-xs text-gray-400">FiveM City Inventory & Financial Monitoring</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-3">
+                <div id="admin-badge" class="hidden items-center space-x-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 px-3 py-1.5 rounded-full text-xs font-semibold">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span>ADMIN MODE</span>
+                </div>
+                <button id="auth-btn" onclick="toggleAuthModal()" class="bg-dark-700 hover:bg-dark-600 text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition border border-dark-600 flex items-center space-x-2">
+                    <i id="auth-icon" class="fa-solid fa-lock"></i>
+                    <span id="auth-text">Admin Login</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow w-full space-y-8">
+
+        <!-- Notification Banner -->
+        <div id="notification" class="hidden p-4 rounded-xl text-sm font-medium transition-all duration-300 flex items-center justify-between">
+            <span id="notif-message"></span>
+            <button onclick="hideNotification()" class="text-current opacity-70 hover:opacity-100"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <!-- Dashboard Statistics Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <!-- Total Transaksi -->
+            <div class="bg-dark-800 border border-dark-700 p-5 rounded-2xl shadow-xl relative overflow-hidden">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total Log Transaksi</p>
+                        <h3 id="stat-total-logs" class="text-2xl font-bold text-white mt-1">0</h3>
+                    </div>
+                    <div class="p-3 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20">
+                        <i class="fa-solid fa-list-check text-lg"></i>
+                    </div>
+                </div>
+                <div class="mt-3 text-xs text-gray-400 flex items-center space-x-1">
+                    <span>Sinkronisasi Cloud Real-time</span>
+                </div>
+            </div>
+
+            <!-- Kas / Saldo Finansial (Klikable Popup) -->
+            <div onclick="openDetailModal('CASH')" class="bg-dark-800 hover:bg-dark-700/60 border border-dark-700 hover:border-emerald-500/50 p-5 rounded-2xl shadow-xl relative overflow-hidden cursor-pointer transition group">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-emerald-400 transition">Net Kas Finansial <i class="fa-solid fa-circle-info text-[10px] ml-1"></i></p>
+                        <h3 id="stat-net-cash" class="text-2xl font-bold text-white mt-1">$0</h3>
+                    </div>
+                    <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
+                        <i class="fa-solid fa-wallet text-lg"></i>
+                    </div>
+                </div>
+                <div class="mt-3 text-xs text-emerald-400 flex items-center space-x-2">
+                    <span>Masuk: <strong id="stat-total-cash-in">$0</strong></span>
+                    <span>•</span>
+                    <span class="text-rose-400">Keluar: <strong id="stat-total-cash-out">$0</strong></span>
+                </div>
+            </div>
+
+            <!-- Total Item Masuk (Klikable Popup) -->
+            <div onclick="openDetailModal('ITEM_IN')" class="bg-dark-800 hover:bg-dark-700/60 border border-dark-700 hover:border-emerald-500/50 p-5 rounded-2xl shadow-xl relative overflow-hidden flex flex-col justify-between cursor-pointer transition group">
+                <div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-emerald-400 transition">Total Item Masuk <i class="fa-solid fa-circle-info text-[10px] ml-1"></i></p>
+                            <h3 id="stat-item-in" class="text-2xl font-bold text-emerald-400 mt-1">0</h3>
+                        </div>
+                        <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
+                            <i class="fa-solid fa-arrow-down text-lg"></i>
+                        </div>
+                    </div>
+                    <div id="stat-item-in-detail" class="mt-3 text-xs text-gray-300 border-t border-dark-700 pt-2 space-y-1">
+                        <span class="text-gray-500 italic">Klik untuk lihat rincian</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Total Item Keluar (Klikable Popup) -->
+            <div onclick="openDetailModal('ITEM_OUT')" class="bg-dark-800 hover:bg-dark-700/60 border border-dark-700 hover:border-rose-500/50 p-5 rounded-2xl shadow-xl relative overflow-hidden flex flex-col justify-between cursor-pointer transition group">
+                <div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-rose-400 transition">Total Item Keluar <i class="fa-solid fa-circle-info text-[10px] ml-1"></i></p>
+                            <h3 id="stat-item-out" class="text-2xl font-bold text-rose-400 mt-1">0</h3>
+                        </div>
+                        <div class="p-3 bg-rose-500/10 text-rose-400 rounded-xl border border-rose-500/20">
+                            <i class="fa-solid fa-arrow-up text-lg"></i>
+                        </div>
+                    </div>
+                    <div id="stat-item-out-detail" class="mt-3 text-xs text-gray-300 border-t border-dark-700 pt-2 space-y-1">
+                        <span class="text-gray-500 italic">Klik untuk lihat rincian</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Input Transaksi & Filter Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Form Input (2 Column Span) -->
+            <div class="lg:col-span-2 bg-dark-800 border border-dark-700 rounded-2xl p-6 shadow-xl">
+                <div class="flex items-center justify-between mb-6 pb-4 border-b border-dark-700">
+                    <div>
+                        <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+                            <i class="fa-solid fa-circle-plus text-blue-500"></i>
+                            <span>Catat Transaksi Baru</span>
+                        </h2>
+                        <p class="text-xs text-gray-400 mt-0.5">Input data arus barang / uang masuk & keluar kota</p>
+                    </div>
+                    <span class="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2.5 py-1 rounded-full font-medium">Public Contributor (~30+ Anggota)</span>
+                </div>
+
+                <form id="transaction-form" onsubmit="handleSubmitTransaction(event)" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">Kategori Transaksi</label>
+                            <select id="category" onchange="handleCategoryChange()" class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                                <option value="ITEM">Barang (Item Game FiveM)</option>
+                                <option value="UANG">Uang (Cash / Bank)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">Arus Transaksi</label>
+                            <select id="transaction_type" class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                                <option value="MASUK">MASUK (+)</option>
+                                <option value="KELUAR">KELUAR (-)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="item-fields-container" class="space-y-4 p-4 bg-dark-900/50 border border-dark-700 rounded-xl">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">Pilih Item FiveM</label>
+                                <select id="item_name" class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                                    <option value="Vest">Vest (Armor / Rompi)</option>
+                                    <option value="Weed">Weed (Cannabis)</option>
+                                    <option value="Meth">Meth (Crystal Meth)</option>
+                                    <option value="Cocca">Cocca (Cocca Leaves)</option>
+                                    <option value="Opium">Opium (Opium Plant)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">Jumlah (Quantity)</label>
+                                <input type="number" id="quantity" min="1" value="1" placeholder="Contoh: 50" class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-dark-800">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">Dari (Pengirim / Asal)</label>
+                                <input type="text" id="item_from" placeholder="Contoh: Ari / Storage Utama" required class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">Untuk (Penerima / Tujuan)</label>
+                                <input type="text" id="item_to" placeholder="Contoh: Budi / Anggota Skuad" required class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5" id="amount-label">Harga Total / Nominal ($)</label>
+                            <!-- Diubah agar tidak perlu menghapus angka 0, langsung menimpa atau kosong jika tidak diisi jadi 0 -->
+                            <input type="number" id="price" min="0" value="0" onclick="this.select()" class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">Nama PIC / Penginput</label>
+                            <input type="text" id="pic" placeholder="Nama karakter Anda di game" required class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">Keterangan / Catatan Tambahan</label>
+                        <input type="text" id="notes" placeholder="Contoh: Pembelian logistik mingguan kartel" class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                    </div>
+
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-xl shadow-lg shadow-blue-600/30 transition flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span>Kirim & Catat Transaksi</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Ringkasan Stok & Saldo Samping (1 Column Span) -->
+            <div class="space-y-6">
+                <div class="bg-dark-800 border border-dark-700 rounded-2xl p-6 shadow-xl">
+                    <h3 class="text-md font-bold text-white mb-4 flex items-center space-x-2">
+                        <i class="fa-solid fa-chart-pie text-blue-500"></i>
+                        <span>Stok Item Aktif</span>
+                    </h3>
+                    <div id="item-summary-list" class="space-y-3"></div>
+                </div>
+
+                <div class="bg-dark-800 border border-dark-700 rounded-2xl p-6 shadow-xl">
+                    <h3 class="text-md font-bold text-white mb-2 flex items-center space-x-2">
+                        <i class="fa-solid fa-circle-info text-amber-400"></i>
+                        <span>Informasi Akses</span>
+                    </h3>
+                    <p class="text-xs text-gray-400 leading-relaxed">
+                        Data tersinkronisasi secara real-time via Cloud Firebase. Klik pada kotak statistik di atas untuk melihat detail lengkap.
+                    </p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- History Log Section -->
+        <div class="bg-dark-800 border border-dark-700 rounded-2xl shadow-xl overflow-hidden">
+            <div class="p-6 border-b border-dark-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+                        <i class="fa-solid fa-clock-rotate-left text-blue-500"></i>
+                        <span>Riwayat Log Transaksi</span>
+                    </h2>
+                    <p class="text-xs text-gray-400 mt-0.5">Klik pada header tabel (Waktu, Kategori, Arus, Harga, PIC) untuk membuka filter dropdown interaktif</p>
+                </div>
+                <div>
+                    <button onclick="resetFilters()" class="text-xs bg-dark-700 hover:bg-dark-600 text-gray-300 border border-dark-600 px-3 py-2 rounded-xl transition flex items-center space-x-1.5">
+                        <i class="fa-solid fa-filter-circle-xmark"></i>
+                        <span>Reset Semua Filter</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto min-h-[300px]">
+                <table class="w-full text-left border-collapse relative">
+                    <thead>
+                        <tr class="bg-dark-900/80 border-b border-dark-700 text-xs text-gray-400 uppercase tracking-wider">
+                            
+                            <!-- Header Waktu -->
+                            <th class="py-3.5 px-6 font-semibold relative cursor-pointer hover:text-white select-none" onclick="toggleDropdown('time-dropdown', event)">
+                                <div class="flex items-center space-x-1.5">
+                                    <span>Waktu</span>
+                                    <i class="fa-solid fa-caret-down text-[10px]"></i>
+                                </div>
+                                <div id="time-dropdown" class="dropdown-menu bg-dark-800 border border-dark-600 rounded-xl shadow-2xl p-2 mt-2 w-48 text-gray-200 normal-case">
+                                    <div class="text-[11px] text-gray-400 px-2 py-1 font-semibold border-b border-dark-700 mb-1">Filter Waktu</div>
+                                    <div onclick="setFilter('time', 'ALL', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer">Semua Waktu</div>
+                                    <div onclick="setFilter('time', 'TODAY', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer">Hari Ini</div>
+                                    <div onclick="setFilter('time', 'WEEK', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer">7 Hari Terakhir</div>
+                                </div>
+                            </th>
+
+                            <!-- Header Kategori -->
+                            <th class="py-3.5 px-6 font-semibold relative cursor-pointer hover:text-white select-none" onclick="toggleDropdown('category-dropdown', event)">
+                                <div class="flex items-center space-x-1.5">
+                                    <span>Kategori</span>
+                                    <i class="fa-solid fa-caret-down text-[10px]"></i>
+                                </div>
+                                <div id="category-dropdown" class="dropdown-menu bg-dark-800 border border-dark-600 rounded-xl shadow-2xl p-2 mt-2 w-44 text-gray-200 normal-case">
+                                    <div class="text-[11px] text-gray-400 px-2 py-1 font-semibold border-b border-dark-700 mb-1">Filter Kategori</div>
+                                    <div onclick="setFilter('category', 'ALL', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer">Semua Kategori</div>
+                                    <div onclick="setFilter('category', 'ITEM', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer">Item Game</div>
+                                    <div onclick="setFilter('category', 'UANG', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer">Uang Kas</div>
+                                </div>
+                            </th>
+
+                            <th class="py-3.5 px-6 font-semibold">Detail Transaksi / Rute</th>
+
+                            <!-- Header Arus -->
+                            <th class="py-3.5 px-6 font-semibold relative cursor-pointer hover:text-white select-none" onclick="toggleDropdown('type-dropdown', event)">
+                                <div class="flex items-center space-x-1.5">
+                                    <span>Arus</span>
+                                    <i class="fa-solid fa-caret-down text-[10px]"></i>
+                                </div>
+                                <div id="type-dropdown" class="dropdown-menu bg-dark-800 border border-dark-600 rounded-xl shadow-2xl p-2 mt-2 w-44 text-gray-200 normal-case">
+                                    <div class="text-[11px] text-gray-400 px-2 py-1 font-semibold border-b border-dark-700 mb-1">Filter Arus</div>
+                                    <div onclick="setFilter('type', 'ALL', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer">Semua Arus</div>
+                                    <div onclick="setFilter('type', 'MASUK', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer">Masuk (+)</div>
+                                    <div onclick="setFilter('type', 'KELUAR', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer">Keluar (-)</div>
+                                </div>
+                            </th>
+
+                            <!-- Header Harga -->
+                            <th class="py-3.5 px-6 font-semibold relative cursor-pointer hover:text-white select-none" onclick="toggleDropdown('price-dropdown', event)">
+                                <div class="flex items-center space-x-1.5">
+                                    <span>Nominal / Harga</span>
+                                    <i class="fa-solid fa-caret-down text-[10px]"></i>
+                                </div>
+                                <div id="price-dropdown" class="dropdown-menu bg-dark-800 border border-dark-600 rounded-xl shadow-2xl p-2 mt-2 w-48 text-gray-200 normal-case">
+                                    <div class="text-[11px] text-gray-400 px-2 py-1 font-semibold border-b border-dark-700 mb-1">Range Harga</div>
+                                    <div onclick="setFilter('price', 'ALL', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer">Semua Harga</div>
+                                    <div onclick="setFilter('price', '0-10000', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer">$0 - $10.000</div>
+                                    <div onclick="setFilter('price', '10000-50000', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer">$10.000 - $50.000</div>
+                                    <div onclick="setFilter('price', '50000-100000', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer">$50.000 - $100.000</div>
+                                    <div onclick="setFilter('price', '100000+', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer">> $100.000</div>
+                                </div>
+                            </th>
+
+                            <!-- Header PIC -->
+                            <th class="py-3.5 px-6 font-semibold relative cursor-pointer hover:text-white select-none" onclick="toggleDropdown('pic-dropdown', event)">
+                                <div class="flex items-center space-x-1.5">
+                                    <span>PIC / Penginput</span>
+                                    <i class="fa-solid fa-caret-down text-[10px]"></i>
+                                </div>
+                                <div id="pic-dropdown" class="dropdown-menu bg-dark-800 border border-dark-600 rounded-xl shadow-2xl p-2 mt-2 w-52 text-gray-200 normal-case max-h-60 overflow-y-auto">
+                                    <div class="text-[11px] text-gray-400 px-2 py-1 font-semibold border-b border-dark-700 mb-1">Pilih Penginput</div>
+                                    <div id="pic-list-options"></div>
+                                </div>
+                            </th>
+
+                            <th class="py-3.5 px-6 font-semibold text-center admin-col hidden">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs-table-body" class="divide-y divide-dark-700 text-sm text-gray-300">
+                        <!-- Data injected via Javascript -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="empty-state" class="hidden py-12 text-center text-gray-500">
+                <i class="fa-solid fa-folder-open text-3xl mb-2"></i>
+                <p class="text-sm">Tidak ada data transaksi yang cocok dengan filter aktif.</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal Pop-up Statistik Detail (Kas, Item Masuk, Item Keluar) -->
+    <div id="detail-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-dark-800 border border-dark-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative max-h-[85vh] flex flex-col">
+            <button onclick="closeDetailModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            
+            <div class="flex items-center space-x-3 mb-4 pb-3 border-b border-dark-700">
+                <div id="modal-icon-container" class="p-2.5 rounded-xl text-lg"></div>
+                <div>
+                    <h3 id="modal-title" class="text-base font-bold text-white">Detail Statistik</h3>
+                    <p class="text-xs text-gray-400">Rincian lengkap dari data yang dipilih</p>
+                </div>
+            </div>
+
+            <div id="modal-body-content" class="overflow-y-auto space-y-3 pr-1 text-sm text-gray-300 flex-grow">
+                <!-- Konten dinamis -->
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-dark-700 text-right">
+                <button onclick="closeDetailModal()" class="bg-dark-700 hover:bg-dark-600 text-gray-200 px-4 py-2 rounded-xl text-xs font-medium transition">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-dark-800 border-t border-dark-700 py-6 mt-12 text-center text-xs text-gray-500">
+        <p>OPJ Inventory & Financial Monitoring System • FiveM Roleplay City Storage</p>
+    </footer>
+
+    <!-- Admin Login Modal -->
+    <div id="auth-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-dark-800 border border-dark-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative">
+            <button onclick="toggleAuthModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            
+            <div class="text-center mb-5">
+                <div class="w-12 h-12 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl flex items-center justify-center mx-auto mb-3 text-xl">
+                    <i class="fa-solid fa-key"></i>
+                </div>
+                <h3 class="text-lg font-bold text-white">Login Administrator</h3>
+                <p class="text-xs text-gray-400 mt-1">Masukkan PIN rahasia untuk membuka hak akses hapus data.</p>
+            </div>
+
+            <form onsubmit="handleAdminLogin(event)" class="space-y-4">
+                <div>
+                    <input type="password" id="admin-pin" placeholder="Masukkan PIN Admin" required class="w-full bg-dark-900 border border-dark-600 rounded-xl px-4 py-2.5 text-sm text-center tracking-widest text-white focus:outline-none focus:border-amber-500 transition">
+                </div>
+                <button type="submit" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-medium py-2.5 rounded-xl transition text-sm shadow-lg shadow-amber-600/20">
+                    Verifikasi Admin
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBDgwPhM5mgOlQIw7JzTB2f4u5irgYoVMY",
+            authDomain: "opj-inventory.firebaseapp.com",
+            projectId: "opj-inventory",
+            storageBucket: "opj-inventory.firebasestorage.app",
+            messagingSenderId: "108115471118",
+            appId: "1:108115471118:web:ff5ed7eeaddbf346bb055f"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let isAdmin = false;
+        const ADMIN_SECRET_PIN = "opjadmin2026"; 
+        let logs = [];
+
+        let currentFilters = {
+            time: 'ALL',
+            category: 'ALL',
+            type: 'ALL',
+            price: 'ALL',
+            pic: 'ALL'
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            handleCategoryChange();
+
+            db.collection("inventory_logs").orderBy("date", "desc").onSnapshot((snapshot) => {
+                logs = [];
+                snapshot.forEach((doc) => {
+                    logs.push({ firestoreId: doc.id, ...doc.data() });
+                });
+                renderPicDropdownOptions();
+                renderLogs();
+                updateStats();
+            }, (error) => {
+                console.error("Gagal mengambil data real-time: ", error);
+                showNotification("Gagal terhubung ke database cloud.", "error");
+            });
+        });
+
+        // Kontrol Dropdown Header
+        function toggleDropdown(dropdownId, event) {
+            event.stopPropagation();
+            const allMenus = document.querySelectorAll('.dropdown-menu');
+            allMenus.forEach(menu => {
+                if (menu.id !== dropdownId) menu.classList.remove('show');
+            });
+            const targetMenu = document.getElementById(dropdownId);
+            targetMenu.classList.toggle('show');
+        }
+
+        function closeAllDropdowns(event) {
+            document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                menu.classList.remove('show');
+            });
+        }
+
+        function setFilter(filterType, value, event) {
+            event.stopPropagation();
+            currentFilters[filterType] = value;
+            document.querySelectorAll('.dropdown-menu').forEach(menu => menu.classList.remove('show'));
+            renderLogs();
+        }
+
+        function resetFilters() {
+            currentFilters = { time: 'ALL', category: 'ALL', type: 'ALL', price: 'ALL', pic: 'ALL' };
+            renderLogs();
+            showNotification('Seluruh filter tabel direset.');
+        }
+
+        function renderPicDropdownOptions() {
+            const container = document.getElementById('pic-list-options');
+            let uniquePics = [...new Set(logs.map(l => l.pic))].filter(Boolean);
+
+            let html = `<div onclick="setFilter('pic', 'ALL', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer font-medium text-blue-400">Semua PIC</div>`;
+            
+            if (uniquePics.length === 0) {
+                html += `<div class="px-2.5 py-1.5 text-xs text-gray-500 italic">Belum ada penginput</div>`;
+            } else {
+                uniquePics.forEach(picName => {
+                    html += `<div onclick="setFilter('pic', '${picName}', event)" class="px-2.5 py-1.5 hover:bg-dark-700 rounded-lg text-xs cursor-pointer truncate">${picName}</div>`;
+                });
+            }
+            container.innerHTML = html;
+        }
+
+        // Modal Pop-up Detail Statistik (Kas, Item Masuk, Item Keluar)
+        function openDetailModal(type) {
+            const modal = document.getElementById('detail-modal');
+            const titleEl = document.getElementById('modal-title');
+            const iconContainer = document.getElementById('modal-icon-container');
+            const contentEl = document.getElementById('modal-body-content');
+
+            contentEl.innerHTML = '';
+
+            if (type === 'CASH') {
+                titleEl.textContent = "Rincian Net Kas Finansial Kota";
+                iconContainer.className = "p-2.5 rounded-xl text-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                iconContainer.innerHTML = '<i class="fa-solid fa-wallet"></i>';
+
+                let cashLogs = logs.filter(l => l.price > 0);
+                if (cashLogs.length === 0) {
+                    contentEl.innerHTML = '<p class="text-xs text-gray-500 italic text-center py-6">Belum ada transaksi finansial yang tercatat.</p>';
+                } else {
+                    let html = `<div class="space-y-2">`;
+                    cashLogs.forEach(l => {
+                        const dateFormatted = new Date(l.date).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+                        const isMasuk = l.type === 'MASUK';
+                        html += `
+                            <div class="p-3 bg-dark-900 rounded-xl border border-dark-700 flex items-center justify-between">
+                                <div>
+                                    <div class="text-xs font-semibold text-white">${l.notes || l.category}</div>
+                                    <div class="text-[11px] text-gray-400 mt-0.5">${dateFormatted} • PIC: ${l.pic}</div>
+                                </div>
+                                <div class="font-mono font-bold text-sm ${isMasuk ? 'text-emerald-400' : 'text-rose-400'}">
+                                    ${isMasuk ? '+' : '-'}$${l.price.toLocaleString('id-ID')}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += `</div>`;
+                    contentEl.innerHTML = html;
+                }
+            } else if (type === 'ITEM_IN') {
+                titleEl.textContent = "Rincian Lengkap Item Masuk";
+                iconContainer.className = "p-2.5 rounded-xl text-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                iconContainer.innerHTML = '<i class="fa-solid fa-arrow-down"></i>';
+
+                let inLogs = logs.filter(l => l.category === 'ITEM' && l.type === 'MASUK');
+                if (inLogs.length === 0) {
+                    contentEl.innerHTML = '<p class="text-xs text-gray-500 italic text-center py-6">Belum ada item masuk yang tercatat.</p>';
+                } else {
+                    let html = `<div class="space-y-2">`;
+                    inLogs.forEach(l => {
+                        const dateFormatted = new Date(l.date).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+                        html += `
+                            <div class="p-3 bg-dark-900 rounded-xl border border-dark-700 flex items-center justify-between">
+                                <div>
+                                    <div class="text-xs font-semibold text-white">${l.quantity}x ${l.itemName}</div>
+                                    <div class="text-[11px] text-gray-400 mt-0.5">Dari: <span class="text-gray-200">${l.from}</span> • PIC: ${l.pic}</div>
+                                    <div class="text-[10px] text-gray-500 mt-0.5">${dateFormatted}</div>
+                                </div>
+                                <div class="font-mono text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded-lg">
+                                    +$${l.price.toLocaleString('id-ID')}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += `</div>`;
+                    contentEl.innerHTML = html;
+                }
+            } else if (type === 'ITEM_OUT') {
+                titleEl.textContent = "Rincian Lengkap Item Keluar";
+                iconContainer.className = "p-2.5 rounded-xl text-lg bg-rose-500/10 text-rose-400 border border-rose-500/20";
+                iconContainer.innerHTML = '<i class="fa-solid fa-arrow-up"></i>';
+
+                let outLogs = logs.filter(l => l.category === 'ITEM' && l.type === 'KELUAR');
+                if (outLogs.length === 0) {
+                    contentEl.innerHTML = '<p class="text-xs text-gray-500 italic text-center py-6">Belum ada item keluar yang tercatat.</p>';
+                } else {
+                    let html = `<div class="space-y-2">`;
+                    outLogs.forEach(l => {
+                        const dateFormatted = new Date(l.date).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+                        html += `
+                            <div class="p-3 bg-dark-900 rounded-xl border border-dark-700 flex items-center justify-between">
+                                <div>
+                                    <div class="text-xs font-semibold text-white">${l.quantity}x ${l.itemName}</div>
+                                    <div class="text-[11px] text-gray-400 mt-0.5">${l.from} ➔ <span class="text-gray-200">${l.to}</span> • PIC: ${l.pic}</div>
+                                    <div class="text-[10px] text-gray-500 mt-0.5">${dateFormatted}</div>
+                                </div>
+                                <div class="font-mono text-xs bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-1 rounded-lg">
+                                    -$${l.price.toLocaleString('id-ID')}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += `</div>`;
+                    contentEl.innerHTML = html;
+                }
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detail-modal').classList.add('hidden');
+        }
+
+        function handleCategoryChange() {
+            const category = document.getElementById('category').value;
+            const itemFields = document.getElementById('item-fields-container');
+            const amountLabel = document.getElementById('amount-label');
+
+            if (category === 'ITEM') {
+                itemFields.classList.remove('hidden');
+                document.getElementById('item_from').setAttribute('required', 'true');
+                document.getElementById('item_to').setAttribute('required', 'true');
+                amountLabel.textContent = 'Harga Total Item ($)';
+            } else {
+                itemFields.classList.add('hidden');
+                document.getElementById('item_from').removeAttribute('required');
+                document.getElementById('item_to').removeAttribute('required');
+                amountLabel.textContent = 'Nominal Uang ($)';
+            }
+        }
+
+        function showNotification(message, type = 'success') {
+            const notif = document.getElementById('notification');
+            const msgEl = document.getElementById('notif-message');
+            
+            notif.className = `p-4 rounded-xl text-sm font-medium transition-all duration-300 flex items-center justify-between ${
+                type === 'success' ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border border-rose-500/30 text-rose-400'
+            }`;
+            msgEl.textContent = message;
+            notif.classList.remove('hidden');
+
+            setTimeout(() => { hideNotification(); }, 4000);
+        }
+
+        function hideNotification() {
+            document.getElementById('notification').classList.add('hidden');
+        }
+
+        // Submit Form Transaksi ke Firestore (Jika harga kosong otomatis bernilai 0)
+        function handleSubmitTransaction(e) {
+            e.preventDefault();
+
+            const category = document.getElementById('category').value;
+            const type = document.getElementById('transaction_type').value;
+            const priceInput = document.getElementById('price').value.trim();
+            const price = priceInput === "" ? 0 : parseFloat(priceInput) || 0;
+            const pic = document.getElementById('pic').value.trim();
+            const notes = document.getElementById('notes').value.trim();
+
+            let itemName = "-";
+            let quantity = 0;
+            let from = "-";
+            let to = "-";
+
+            if (category === 'ITEM') {
+                itemName = document.getElementById('item_name').value;
+                quantity = parseInt(document.getElementById('quantity').value) || 0;
+                from = document.getElementById('item_from').value.trim();
+                to = document.getElementById('item_to').value.trim();
+
+                if (quantity <= 0) {
+                    showNotification('Jumlah kuantitas item harus lebih besar dari 0!', 'error');
+                    return;
+                }
+            }
+
+            const newLog = {
+                date: new Date().toISOString(),
+                category,
+                itemName,
+                quantity,
+                from,
+                to,
+                type,
+                price,
+                pic,
+                notes
+            };
+
+            db.collection("inventory_logs").add(newLog)
+                .then(() => {
+                    document.getElementById('transaction-form').reset();
+                    document.getElementById('price').value = "0"; // Reset default 0
+                    handleCategoryChange();
+                    showNotification('Transaksi berhasil dicatat dan disinkronkan ke cloud!');
+                })
+                .catch((error) => {
+                    showNotification('Gagal menyimpan ke database: ' + error.message, 'error');
+                });
+        }
+
+        function deleteLog(firestoreId) {
+            if (!isAdmin) {
+                showNotification('Akses ditolak! Anda bukan administrator.', 'error');
+                return;
+            }
+
+            if (confirm('Apakah Anda yakin ingin menghapus data log transaksi ini dari cloud?')) {
+                db.collection("inventory_logs").doc(firestoreId).delete()
+                    .then(() => {
+                        showNotification('Log transaksi berhasil dihapus dari cloud.');
+                    })
+                    .catch((error) => {
+                        showNotification('Gagal menghapus data: ' + error.message, 'error');
+                    });
+            }
+        }
+
+        function renderLogs() {
+            const tbody = document.getElementById('logs-table-body');
+            const emptyState = document.getElementById('empty-state');
+
+            tbody.innerHTML = '';
+
+            let filteredLogs = logs.filter(log => {
+                if (currentFilters.category !== 'ALL' && log.category !== currentFilters.category) return false;
+                if (currentFilters.type !== 'ALL' && log.type !== currentFilters.type) return false;
+                if (currentFilters.pic !== 'ALL' && log.pic !== currentFilters.pic) return false;
+
+                if (currentFilters.time !== 'ALL') {
+                    const logDate = new Date(log.date);
+                    const now = new Date();
+                    if (currentFilters.time === 'TODAY') {
+                        if (logDate.toDateString() !== now.toDateString()) return false;
+                    } else if (currentFilters.time === 'WEEK') {
+                        const diffTime = Math.abs(now - logDate);
+                        const diffDays = diffTime / (1000 * 60 * 60 * 24);
+                        if (diffDays > 7) return false;
+                    }
+                }
+
+                if (currentFilters.price !== 'ALL') {
+                    const p = log.price;
+                    if (currentFilters.price === '0-10000' && (p < 0 || p > 10000)) return false;
+                    if (currentFilters.price === '10000-50000' && (p <= 10000 || p > 50000)) return false;
+                    if (currentFilters.price === '50000-100000' && (p <= 50000 || p > 100000)) return false;
+                    if (currentFilters.price === '100000+' && p <= 100000) return false;
+                }
+
+                return true;
+            });
+
+            if (filteredLogs.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            filteredLogs.forEach(log => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-dark-700/50 transition";
+
+                const dateFormatted = new Date(log.date).toLocaleString('id-ID', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short'
+                });
+
+                const isItem = log.category === 'ITEM';
+                const badgeColor = log.type === 'MASUK' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30';
+                
+                let detailHtml = '';
+                if (isItem) {
+                    detailHtml = `
+                        <div>
+                            <span class="font-semibold text-white">${log.itemName}</span> 
+                            <span class="text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded ml-1 font-mono">Qty: ${log.quantity}</span>
+                        </div>
+                        <div class="text-xs text-gray-400 mt-0.5 flex items-center space-x-1">
+                            <span>Dari: <strong class="text-gray-300">${log.from}</strong></span>
+                            <span>•</span>
+                            <span>Ke: <strong class="text-gray-300">${log.to}</strong></span>
+                        </div>
+                    `;
+                } else {
+                    detailHtml = `
+                        <div>
+                            <span class="font-semibold text-white">Kas / Saldo Uang</span>
+                        </div>
+                        <div class="text-xs text-gray-400 mt-0.5">
+                            ${log.notes || 'Arus Kas Umum'}
+                        </div>
+                    `;
+                }
+
+                tr.innerHTML = `
+                    <td class="py-4 px-6 text-xs text-gray-400 whitespace-nowrap">${dateFormatted}</td>
+                    <td class="py-4 px-6 whitespace-nowrap">
+                        <span class="px-2.5 py-1 rounded-md text-xs font-semibold ${log.category === 'ITEM' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'}">
+                            ${log.category}
+                        </span>
+                    </td>
+                    <td class="py-4 px-6">${detailHtml}</td>
+                    <td class="py-4 px-6 whitespace-nowrap">
+                        <span class="px-2.5 py-1 rounded-full text-xs font-bold border ${badgeColor}">
+                            ${log.type}
+                        </span>
+                    </td>
+                    <td class="py-4 px-6 font-mono font-medium text-white whitespace-nowrap">$${log.price.toLocaleString('id-ID')}</td>
+                    <td class="py-4 px-6 text-xs text-gray-300 whitespace-nowrap">
+                        <div class="font-medium text-white"><i class="fa-solid fa-user-pen text-[10px] mr-1 text-blue-400"></i>${log.pic}</div>
+                        ${isItem && log.notes ? `<div class="text-[11px] text-gray-400 mt-0.5 truncate max-w-xs">${log.notes}</div>` : ''}
+                    </td>
+                    <td class="py-4 px-6 text-center whitespace-nowrap admin-action-cell ${isAdmin ? '' : 'hidden'}">
+                        <button onclick="deleteLog('${log.firestoreId}')" class="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition border border-rose-500/30 text-xs" title="Hapus Log">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateStats() {
+            document.getElementById('stat-total-logs').textContent = logs.length;
+
+            let totalCashIn = 0;
+            let totalCashOut = 0;
+            let totalItemInQty = 0;
+            let totalItemOutQty = 0;
+
+            const itemStockMap = { 'Vest': 0, 'Weed': 0, 'Meth': 0, 'Cocca': 0, 'Opium': 0 };
+            let itemInBreakdown = {};
+            let itemOutBreakdown = {};
+
+            logs.forEach(log => {
+                if (log.type === 'MASUK') {
+                    totalCashIn += log.price;
+                } else {
+                    totalCashOut += log.price;
+                }
+
+                if (log.category === 'ITEM') {
+                    if (log.type === 'MASUK') {
+                        itemStockMap[log.itemName] += log.quantity;
+                        totalItemInQty += log.quantity;
+
+                        if (!itemInBreakdown[log.itemName]) {
+                            itemInBreakdown[log.itemName] = { total: 0 };
+                        }
+                        itemInBreakdown[log.itemName].total += log.quantity;
+
+                    } else {
+                        itemStockMap[log.itemName] -= log.quantity;
+                        totalItemOutQty += log.quantity;
+
+                        if (!itemOutBreakdown[log.itemName]) {
+                            itemOutBreakdown[log.itemName] = { total: 0 };
+                        }
+                        itemOutBreakdown[log.itemName].total += log.quantity;
+                    }
+                }
+            });
+
+            const netCash = totalCashIn - totalCashOut;
+            const netCashEl = document.getElementById('stat-net-cash');
+            netCashEl.textContent = `$${netCash.toLocaleString('id-ID')}`;
+            netCashEl.className = `text-2xl font-bold mt-1 ${netCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+            document.getElementById('stat-total-cash-in').textContent = `$${totalCashIn.toLocaleString('id-ID')}`;
+            document.getElementById('stat-total-cash-out').textContent = `$${totalCashOut.toLocaleString('id-ID')}`;
+            
+            document.getElementById('stat-item-in').textContent = totalItemInQty.toLocaleString('id-ID');
+            document.getElementById('stat-item-out').textContent = totalItemOutQty.toLocaleString('id-ID');
+
+            // Render Ringkasan Singkat Kartu Atas
+            const itemInDetailEl = document.getElementById('stat-item-in-detail');
+            itemInDetailEl.innerHTML = '';
+            if (Object.keys(itemInBreakdown).length === 0) {
+                itemInDetailEl.innerHTML = '<span class="text-gray-500 italic">Klik untuk lihat rincian</span>';
+            } else {
+                let htmlIn = '';
+                for (let [item, data] of Object.entries(itemInBreakdown)) {
+                    htmlIn += `<div class="text-[11px] text-gray-300">• ${data.total} ${item}</div>`;
+                }
+                itemInDetailEl.innerHTML = htmlIn;
+            }
+
+            const itemOutDetailEl = document.getElementById('stat-item-out-detail');
+            itemOutDetailEl.innerHTML = '';
+            if (Object.keys(itemOutBreakdown).length === 0) {
+                itemOutDetailEl.innerHTML = '<span class="text-gray-500 italic">Klik untuk lihat rincian</span>';
+            } else {
+                let htmlOut = '';
+                for (let [item, data] of Object.entries(itemOutBreakdown)) {
+                    htmlOut += `<div class="text-[11px] text-gray-300">• ${data.total} ${item}</div>`;
+                }
+                itemOutDetailEl.innerHTML = htmlOut;
+            }
+
+            // Render Ringkasan Stok Samping
+            const summaryListEl = document.getElementById('item-summary-list');
+            summaryListEl.innerHTML = '';
+
+            Object.keys(itemStockMap).forEach(itemName => {
+                const stock = itemStockMap[itemName];
+                const row = document.createElement('div');
+                row.className = "flex items-center justify-between p-3 bg-dark-900 rounded-xl border border-dark-700/60";
+                row.innerHTML = `
+                    <div class="flex items-center space-x-2.5">
+                        <div class="w-2 h-2 rounded-full ${stock > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-gray-600'}"></div>
+                        <span class="text-sm font-medium text-gray-200">${itemName}</span>
+                    </div>
+                    <span class="text-xs font-mono font-bold px-2.5 py-1 rounded-lg ${stock > 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-dark-800 text-gray-400 border border-dark-700'}">
+                        ${stock} Unit
+                    </span>
+                `;
+                summaryListEl.appendChild(row);
+            });
+        }
+
+        function toggleAuthModal() {
+            const modal = document.getElementById('auth-modal');
+            modal.classList.toggle('hidden');
+            if (!modal.classList.contains('hidden')) {
+                document.getElementById('admin-pin').value = '';
+                document.getElementById('admin-pin').focus();
+            }
+        }
+
+        function handleAdminLogin(e) {
+            e.preventDefault();
+            const pin = document.getElementById('admin-pin').value;
+
+            if (pin === ADMIN_SECRET_PIN) {
+                isAdmin = true;
+                toggleAuthModal();
+                updateAuthUI();
+                showNotification('Berhasil masuk sebagai Administrator!');
+            } else {
+                showNotification('PIN Admin salah! Akses ditolak.', 'error');
+            }
+        }
+
+        function updateAuthUI() {
+            const adminBadge = document.getElementById('admin-badge');
+            const authText = document.getElementById('auth-text');
+            const authIcon = document.getElementById('auth-icon');
+            const authBtn = document.getElementById('auth-btn');
+            const adminActionCells = document.querySelectorAll('.admin-action-cell');
+            const adminCols = document.querySelectorAll('.admin-col');
+
+            if (isAdmin) {
+                adminBadge.classList.remove('hidden');
+                adminBadge.classList.add('flex');
+                authText.textContent = 'Logout Admin';
+                authIcon.className = "fa-solid fa-unlock text-amber-400";
+                authBtn.className = "bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 px-4 py-2 rounded-lg text-sm font-medium transition border border-amber-500/40 flex items-center space-x-2";
+                
+                adminActionCells.forEach(el => el.classList.remove('hidden'));
+                adminCols.forEach(el => el.classList.remove('hidden'));
+
+                authBtn.setAttribute('onclick', 'handleAdminLogout()');
+            } else {
+                adminBadge.classList.add('hidden');
+                adminBadge.classList.remove('flex');
+                authText.textContent = 'Admin Login';
+                authIcon.className = "fa-solid fa-lock";
+                authBtn.className = "bg-dark-700 hover:bg-dark-600 text-gray-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition border border-dark-600 flex items-center space-x-2";
+
+                adminActionCells.forEach(el => el.classList.add('hidden'));
+                adminCols.forEach(el => el.classList.add('hidden'));
+
+                authBtn.setAttribute('onclick', 'toggleAuthModal()');
+            }
+        }
+
+        function handleAdminLogout() {
+            isAdmin = false;
+            updateAuthUI();
+            renderLogs();
+            showNotification('Anda telah keluar dari mode admin.');
+        }
+    </script>
+</body>
+</html>
