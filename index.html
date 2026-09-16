@@ -253,11 +253,11 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-dark-800">
                                     <div>
                                         <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">Dari (Pengirim / Asal)</label>
-                                        <input type="text" id="item_from" value="contoh: OPJ - Juki" onfocus="handleFieldFocus(this, 'contoh: Allstar')" onblur="handleFieldBlur(this, 'contoh: OPJ - Juki')" oninput="checkStepField('item_from')" disabled class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-gray-400 focus:outline-none focus:border-brand-red transition disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <input type="text" id="item_from" value="contoh: OPJ - Juki" onclick="handleFieldFocus(this, 'contoh: OPJ - Juki')" onblur="handleFieldBlur(this, 'contoh: OPJ - Juki')" oninput="checkStepField('item_from')" disabled class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-gray-400 focus:outline-none focus:border-brand-red transition disabled:opacity-50 disabled:cursor-not-allowed">
                                     </div>
                                     <div>
                                         <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">Untuk (Penerima / Tujuan)</label>
-                                        <input type="text" id="item_to" value="contoh: Nakama - Papuy" onfocus="handleFieldFocus(this, 'contoh: OPJ - Juki')" onblur="handleFieldBlur(this, 'contoh: Nakama - Papuy')" oninput="checkStepField('item_to')" disabled class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-gray-400 focus:outline-none focus:border-brand-red transition disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <input type="text" id="item_to" value="contoh: Nakama - Papuy" onclick="handleFieldFocus(this, 'contoh: Nakama - Papuy')" onblur="handleFieldBlur(this, 'contoh: Nakama - Papuy')" oninput="checkStepField('item_to')" disabled class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-gray-400 focus:outline-none focus:border-brand-red transition disabled:opacity-50 disabled:cursor-not-allowed">
                                     </div>
                                 </div>
                             </div>
@@ -270,7 +270,7 @@
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">Nama PIC / Penginput</label>
-                                    <input type="text" id="pic" oninput="checkStepField('pic')" disabled placeholder="Nama karakter Anda di game" class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-red transition disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <input type="text" id="pic" oninput="checkStepField('pic')" disabled placeholder="Nama" class="w-full bg-dark-900 border border-dark-600 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-red transition disabled:opacity-50 disabled:cursor-not-allowed">
                                 </div>
                             </div>
 
@@ -1241,9 +1241,12 @@
             } else if (changedFieldId === 'item_from') {
                 document.getElementById('item_to').disabled = (itemFrom === '' || itemFrom === 'contoh: OPJ - Juki');
             } else if (changedFieldId === 'item_to') {
-                document.getElementById('price').disabled = (itemTo === '' || itemTo === 'contoh: Nakama - Papuy');
-            } else if (changedFieldId === 'price' || changedFieldId === 'item_to') {
-                // Meskipun harga kosong/gratis, PIC langsung bisa diisi setelah 'Untuk' terisi
+                // Field "Untuk" terisi valid -> Harga Total & PIC / Penginput langsung enable bersamaan
+                const isToFilled = (itemTo !== '' && itemTo !== 'contoh: Nakama - Papuy');
+                document.getElementById('price').disabled = !isToFilled;
+                document.getElementById('pic').disabled = !isToFilled;
+            } else if (changedFieldId === 'price') {
+                // Meskipun harga kosong/gratis, PIC tetap bisa diisi selama 'Untuk' sudah terisi
                 document.getElementById('pic').disabled = false; 
             } else if (changedFieldId === 'pic') {
                 document.getElementById('notes').disabled = !pic;
@@ -1282,7 +1285,7 @@
 
             const priceInput = document.getElementById('price');
             priceInput.disabled = true;
-            priceInput.value = "gratis";
+            priceInput.value = "Tidak perlu diisi jika GRATIS";
             priceInput.classList.remove('text-white');
             priceInput.classList.add('text-gray-400');
 
